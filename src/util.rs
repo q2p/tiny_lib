@@ -1,5 +1,6 @@
 use core::num::NonZeroI8;
 use core::ops::*;
+use core::cmp::Ordering;
 
 pub trait QuickInverseSQRT {
 	fn quick_inverse_sqrt(self) -> Self;
@@ -38,7 +39,7 @@ impl QuickInverseSQRT for f32 {
 	}
 }
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Copy, Clone, Ord, Eq)]
 pub struct NonZeroSignum(NonZeroI8);
 
 impl NonZeroSignum {
@@ -62,6 +63,26 @@ impl Neg for NonZeroSignum {
 		// Unsafe, because `self.0` might be 0. But it's guaranteed not to be 0, because we are using NonZero struct.
 		NonZeroSignum(unsafe { NonZeroI8::new_unchecked(-self.0.get()) })
 	}
+}
+
+impl PartialEq for NonZeroSignum {
+	#[inline(always)]
+	fn eq(&self, other: &Self) -> bool { self.0.get() == other.0.get() }
+	#[inline(always)]
+	fn ne(&self, other: &Self) -> bool { self.0.get() != other.0.get() }
+}
+
+impl PartialOrd for NonZeroSignum {
+	#[inline(always)]
+	fn partial_cmp(&self, other: &NonZeroSignum) -> Option<Ordering> { Some(self.0.get().cmp(&other.0.get())) }
+	#[inline(always)]
+	fn lt(&self, other: &NonZeroSignum) -> bool { self.0.get() <  other.0.get() }
+	#[inline(always)]
+	fn le(&self, other: &NonZeroSignum) -> bool { self.0.get() <= other.0.get() }
+	#[inline(always)]
+	fn gt(&self, other: &NonZeroSignum) -> bool { self.0.get() >  other.0.get() }
+	#[inline(always)]
+	fn ge(&self, other: &NonZeroSignum) -> bool { self.0.get() >= other.0.get() }
 }
 
 // TODO: tests
@@ -109,6 +130,42 @@ macro_rules! impl_signum_signed {
 				type Output = $t;
 				#[inline(always)]
 				fn sub(self, rhs: NonZeroSignum) -> $t { self - Into::<$t>::into(rhs) }
+			}
+			impl PartialEq<$t> for NonZeroSignum {
+				#[inline(always)]
+				fn eq(&self, other: &$t) -> bool { self.0.get() as $t == *other }
+				#[inline(always)]
+				fn ne(&self, other: &$t) -> bool { self.0.get() as $t != *other }
+			}
+			impl PartialEq<NonZeroSignum> for $t {
+				#[inline(always)]
+				fn eq(&self, other: &NonZeroSignum) -> bool { *self == other.0.get() as $t }
+				#[inline(always)]
+				fn ne(&self, other: &NonZeroSignum) -> bool { *self != other.0.get() as $t }
+			}
+			impl PartialOrd<$t> for NonZeroSignum {
+				#[inline(always)]
+				fn partial_cmp(&self, other: &$t) -> Option<Ordering> { Some((self.0.get() as $t).cmp(other)) }
+				#[inline(always)]
+				fn lt(&self, other: &$t) -> bool { (self.0.get() as $t) <  (*other) }
+				#[inline(always)]
+				fn le(&self, other: &$t) -> bool { (self.0.get() as $t) <= (*other) }
+				#[inline(always)]
+				fn gt(&self, other: &$t) -> bool { (self.0.get() as $t) >  (*other) }
+				#[inline(always)]
+				fn ge(&self, other: &$t) -> bool { (self.0.get() as $t) >= (*other) }
+			}
+			impl PartialOrd<NonZeroSignum> for $t {
+				#[inline(always)]
+				fn partial_cmp(&self, other: &NonZeroSignum) -> Option<Ordering> { Some(self.cmp(&(other.0.get() as $t))) }
+				#[inline(always)]
+				fn lt(&self, other: &NonZeroSignum) -> bool { (*self) <  (other.0.get() as $t) }
+				#[inline(always)]
+				fn le(&self, other: &NonZeroSignum) -> bool { (*self) <= (other.0.get() as $t) }
+				#[inline(always)]
+				fn gt(&self, other: &NonZeroSignum) -> bool { (*self) >  (other.0.get() as $t) }
+				#[inline(always)]
+				fn ge(&self, other: &NonZeroSignum) -> bool { (*self) >= (other.0.get() as $t) }
 			}
 			impl_assign!($t);
 		)*
