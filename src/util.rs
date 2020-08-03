@@ -1,9 +1,133 @@
 use core::num::NonZeroI8;
 use core::ops::*;
 use core::cmp::Ordering;
+use core::f32::consts::PI;
+use crate::matrices::*;
+use crate::vector::*;
+
+#[inline(always)]
+pub fn projection_matrix(fov_degrees:f32, aspect_ratio:f32, plane_near:f32, plane_far:f32) -> Matrix4x4 {
+	let fov_rad = 1f32 / (fov_degrees * PI / 360f32).tan();
+	let mut matrix = Matrix4x4::ZERO;
+	matrix.m[0][0] = aspect_ratio * fov_rad;
+	matrix.m[1][1] = fov_rad;
+	matrix.m[2][2] = plane_far / (plane_far - plane_near);
+	matrix.m[3][2] = (-plane_far * plane_near) / (plane_far - plane_near);
+	matrix.m[2][3] = 1f32;
+	matrix.m[3][3] = 0f32;
+	return matrix;
+}
+
+#[inline(always)]
+pub fn transition_matrix(pos:&Vec3) -> Matrix4x4 {
+	let mut matrix = Matrix4x4::IDENTITY;
+	matrix.m[3][0] = pos.x;
+	matrix.m[3][1] = pos.y;
+	matrix.m[3][2] = pos.z;
+	return matrix;
+}
+
+#[inline(always)]
+pub fn rotation_matrix_z(a:f32) -> Matrix3x3 {
+	let a_cos = a.cos();
+	let a_sin = a.sin();
+
+	Matrix3x3 {
+		m: [
+			[  a_cos,  a_sin,   0f32],
+			[ -a_sin,  a_cos,   0f32],
+			[   0f32,   0f32,   1f32],
+		]
+	}
+}
+#[inline(always)]
+pub fn rotation_matrix_x(a:f32) -> Matrix3x3 {
+	let a_cos = a.cos();
+	let a_sin = a.sin();
+
+	Matrix3x3 {
+		m: [
+			[   1f32,   0f32,   0f32],
+			[   0f32,  a_cos,  a_sin],
+			[   0f32, -a_sin,  a_cos],
+		]
+	}
+}
+#[inline(always)]
+pub fn rotation_matrix_y(a:f32) -> Matrix3x3 {
+	let a_cos = a.cos();
+	let a_sin = a.sin();
+
+	Matrix3x3 {
+		m: [
+			[  a_cos,   0f32, -a_sin],
+			[   0f32,   1f32,   0f32],
+			[  a_sin,   0f32,  a_cos],
+		]
+	}
+}
+
+pub fn point_at_matrix(pos:&Vec3, target:&Vec3, up:&Vec3) -> Matrix4x4 {
+	// TODO: нужны ли все эти new_up, new_right, или их можно просчитать заранее?
+	// TODO: need normalization?
+	let new_forward:Vec3 = (target - pos).normalize();
+
+	let a:Vec3 = new_forward * Vec3::dot(up, &new_forward);
+	let new_up:Vec3 = (up - &a).normalize();
+
+	let new_right = Vec3::cross_product(&new_up, &new_forward);
+
+	return Matrix4x4 {
+		m: [
+			[  new_right.x,   new_right.y,   new_right.z, 0f32],
+			[     new_up.x,      new_up.y,      new_up.z, 0f32],
+			[new_forward.x, new_forward.y, new_forward.z, 0f32],
+			[        pos.x,         pos.y,         pos.z, 1f32]
+		]
+	};
+}
+
+pub fn inverse_transformation_matrix(matrix:&Matrix4x4) -> Matrix4x4 {
+	return Matrix4x4 {
+		m: [
+			[matrix.m[0][0], matrix.m[1][0], matrix.m[2][0], 0f32],
+			[matrix.m[0][1], matrix.m[1][1], matrix.m[2][1], 0f32],
+			[matrix.m[0][2], matrix.m[1][2], matrix.m[2][2], 0f32],
+			[
+				-(matrix.m[3][0] * matrix.m[0][0] + matrix.m[3][1] * matrix.m[0][1] + matrix.m[3][2] * matrix.m[0][2]),
+				-(matrix.m[3][0] * matrix.m[1][0] + matrix.m[3][1] * matrix.m[1][1] + matrix.m[3][2] * matrix.m[1][2]),
+				-(matrix.m[3][0] * matrix.m[2][0] + matrix.m[3][1] * matrix.m[2][1] + matrix.m[3][2] * matrix.m[2][2]),
+				1f32
+			]
+		]
+	};
+}
+
+pub fn multiply_vector_matrix(inp:&Vec4, matrix:&Matrix4x4) -> Vec4 {
+	let mut out = Vec4 {
+		x: inp.x * matrix.m[0][0] + inp.y * matrix.m[1][0] + inp.z * matrix.m[2][0] + matrix.m[3][0],
+		y: inp.x * matrix.m[0][1] + inp.y * matrix.m[1][1] + inp.z * matrix.m[2][1] + matrix.m[3][1],
+		z: inp.x * matrix.m[0][2] + inp.y * matrix.m[1][2] + inp.z * matrix.m[2][2] + matrix.m[3][2],
+		w: inp.x * matrix.m[0][3] + inp.y * matrix.m[1][3] + inp.z * matrix.m[2][3] + matrix.m[3][3],
+	};
+
+	let w = inp.x * matrix.m[0][3] + inp.y * matrix.m[1][3] + inp.z * matrix.m[2][3] + matrix.m[3][3];
+
+	if w != 0f32 { // TODO: когда w == 0 ?
+		out.x /= w;
+		out.y /= w;
+		out.z /= w;
+	}
+
+	return out;
+}
 
 pub trait QuickInverseSQRT {
 	fn quick_inverse_sqrt(self) -> Self;
+}
+
+pub trait Square {
+	fn sq(self) -> Self;
 }
 
 #[repr(C)]
@@ -37,6 +161,11 @@ impl QuickInverseSQRT for f32 {
 
 		return y;
 	}
+}
+
+impl Square for f32 {
+	#[inline(always)]
+	fn sq(self) -> f32 { self*self }
 }
 
 #[derive(Copy, Clone, Ord, Eq)]
@@ -208,3 +337,40 @@ impl_signum_unsigned!(u8 , i8 );
 impl_signum_unsigned!(u16, i16);
 impl_signum_unsigned!(u32, i32);
 impl_signum_unsigned!(u64, i64);
+
+
+pub trait Lerp {
+	type Output;
+	fn lerp(self, v2:Self, t:f32) -> Self::Output;
+	/// Precise method, which guarantees v = v1 when t = 1.
+	fn lerp_p(self, v2:Self, t:f32) -> Self::Output;
+}
+
+impl Lerp for f32 {
+	type Output = f32;
+	#[inline(always)]
+	fn lerp(self, v2:Self, t:f32) -> f32 {
+		self + t * (v2 - self)
+	}
+	#[inline(always)]
+	fn lerp_p(self, v2:Self, t:f32) -> f32 {
+		(1f32 - t) * self + t * v2
+	}
+}
+
+pub trait Smoothstep {
+	type Output;
+	fn linearstep(edge0:Self, edge1:Self, t:f32) -> Self::Output;
+	fn smoothstep(edge0:Self, edge1:Self, t:f32) -> Self::Output;
+}
+
+impl Smoothstep for f32 {
+	type Output = f32;
+	fn linearstep(edge0:f32, edge1:f32, t:f32) -> f32 {
+		((t - edge0) / (edge1 - edge0)).clamp(0.0, 1.0)
+	}
+	fn smoothstep(edge0:f32, edge1:f32, t:f32) -> f32 {
+		let a = Self::linearstep(edge0, edge1, t);
+		return a * a * (3f32 - 2f32 * a);
+	}
+}
