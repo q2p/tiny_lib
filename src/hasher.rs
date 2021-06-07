@@ -224,6 +224,213 @@ mod xx_hasher_64 {
 	}
 }
 
+mod murmur2 {
+// fn MurmurHash2( data:&[u8], seed:u32) -> u32 {
+// 	let mut len = key.len() as u32;
+
+// 	// 'm' and 'r' are mixing constants generated offline. They're not really 'magic', they just happen to work well.
+// 	let m:u32 = 0x5bd1e995;
+// 	let r:u32 = 24;
+
+// 	/* Initialize the hash to a 'random' value */
+// 	let h = seed ^ len;
+
+// 	// Mix 4 bytes at a time into the hash
+// 	let p = 0;
+
+// 	while len >= 4 {
+// 		let k:u32 = data[p..p+4];
+// 		p += 4;
+// 		len -= 4;
+
+// 		k *= m;
+// 		k ^= k >> r;
+// 		k *= m;
+
+// 		h *= m;
+// 		h ^= k;
+// 	}
+
+// 	if len != 0 {
+// 		if len == 3 { h ^= data[p+2] as u32 << 16; }
+// 		if len >= 2 { h ^= data[p+1] as u32 <<  8; }
+// 		if len >= 1 { h ^= data[p+0] as u32      ; }
+// 		h *= m;
+// 	}
+
+// 	h ^= h >> 13;
+// 	h *= m;
+// 	h ^= h >> 15;
+
+// 	return h;
+// } 
+
+// /*-----------------------------------------------------------------------------
+// // MurmurHash2, 64-bit versions, by Austin Appleby
+// //
+// // The same caveats as 32-bit MurmurHash2 apply here - beware of alignment 
+// // and endian-ness issues if used across multiple platforms.
+// //
+// // 64-bit hash for 64-bit platforms
+// */
+
+// fn MurmurHash64(data:&[u8], seed:u64) -> u64 {
+// 	const m:u64 = 0xc6a4a7935bd1e995;
+// 	const r:u32 = 47;
+
+// 	let len = data.len() as u64;
+
+// 	let h = seed ^ (len * m);
+
+// 	let end = len / 8;
+// 	let p = 0;
+
+// 	while p != end {
+// 		let k = data[p..p+8];
+// 		p += 8;
+
+// 		k *= m; 
+// 		k ^= k >> r; 
+// 		k *= m; 
+		
+// 		h ^= k;
+// 		h *= m; 
+// 	}
+
+// 	if len != 0 {
+// 		if len == 7 { h ^= data[p+6] as u64 << 48; }
+// 		if len >= 6 { h ^= data[p+5] as u64 << 40; }
+// 		if len >= 5 { h ^= data[p+4] as u64 << 32; }
+// 		if len >= 4 { h ^= data[p+3] as u64 << 24; }
+// 		if len >= 3 { h ^= data[p+2] as u64 << 16; }
+// 		if len >= 2 { h ^= data[p+1] as u64 <<  8; }
+// 		if len >= 1 { h ^= data[p+0] as u64      ; }
+// 		h *= m;
+// 	}
+ 
+// 	h ^= h >> r;
+// 	h *= m;
+// 	h ^= h >> r;
+
+// 	return h;
+// }
+}
+
+mod murmur2a {
+	/*-----------------------------------------------------------------------------
+	// MurmurHash2A, by Austin Appleby
+	//
+	// This is a variant of MurmurHash2 modified to use the Merkle-Damgard 
+	// construction. Bulk speed should be identical to Murmur2, small-key speed 
+	// will be 10%-20% slower due to the added overhead at the end of the hash.
+	//
+	// This variant fixes a minor issue where null keys were more likely to
+	// collide with each other than expected, and also makes the function
+	// more amenable to incremental implementations.
+	*/
+
+	const m:u32 = 0x5bd1e995;
+	const r:u32 = 24;
+
+	#[inline(always)]
+	fn mmix(h:&mut u32, mut k:u32) {
+		k *= m;
+		k ^= k >> r;
+		k *= m;
+		*h *= m;
+		*h ^= k;
+	}
+
+	// fn hash(data:&[u8], seed:u32) -> u32 {
+	// 	let l = data.len() as u32;
+	// 	let mut len = data.len() as u32;
+
+	// 	let h = seed;
+
+	// 	let mut p = 0;
+	// 	while len >= 4 {
+	// 		mmix(&mut h, data[p..p+4].to_le());
+
+	// 		p += 4;
+	// 		len -= 4;
+	// 	}
+
+	// 	let t:u32 = (data[p..] as u32).to_le();
+
+	// 	mmix(&mut h,t);
+	// 	mmix(&mut h,l);
+
+	// 	h ^= h >> 13;
+	// 	h *= m;
+	// 	h ^= h >> 15;
+
+	// 	return h;
+	// }
+
+	pub fn hash8(seed:u32, v:u8) -> u32 {
+		let mut h = seed;
+
+		mmix(&mut h,v as u32);
+		mmix(&mut h,1);
+
+		h ^= h >> 13;
+		h *= m;
+		h ^= h >> 15;
+
+		return h;
+	}
+
+	pub fn hash16(seed:u32, mut v:u16) -> u32 {
+		v = v.to_le();
+
+		let mut h = seed;
+
+		mmix(&mut h,v as u32);
+		mmix(&mut h,2);
+
+		h ^= h >> 13;
+		h *= m;
+		h ^= h >> 15;
+
+		return h;
+	}
+
+	pub fn hash32(seed:u32, mut v:u32) -> u32 {
+		v = v.to_le();
+		
+		let mut h = seed;
+		
+		mmix(&mut h, v);
+
+		mmix(&mut h,0);
+		mmix(&mut h,4);
+
+		h ^= h >> 13;
+		h *= m;
+		h ^= h >> 15;
+
+		return h;
+	}
+
+	pub fn hash64(seed:u32, mut v:u64) -> u32 {
+		v = v.to_le();
+
+		let mut h = seed;
+
+		mmix(&mut h,  v        as u32);
+		mmix(&mut h, (v >> 32) as u32);
+
+		mmix(&mut h,0);
+		mmix(&mut h,8);
+
+		h ^= h >> 13;
+		h *= m;
+		h ^= h >> 15;
+
+		return h;
+	}
+}
+
 pub trait HasherTrait<S, H> {
 	fn hash_u8( seed:S, v:u8 ) -> H;
 	fn hash_u16(seed:S, v:u16) -> H;
@@ -249,4 +456,11 @@ impl HasherTrait<u64, u64> for HasherXX64 {
 	#[inline(always)] fn hash_u16(seed:u64, v:u16) -> u64 { xx_hasher_64::hash16(seed, v) }
 	#[inline(always)] fn hash_u32(seed:u64, v:u32) -> u64 { xx_hasher_64::hash32(seed, v) }
 	#[inline(always)] fn hash_u64(seed:u64, v:u64) -> u64 { xx_hasher_64::hash64(seed, v) }
+}
+
+impl HasherTrait<u32, u32> for HasherMurMur2A {
+	#[inline(always)] fn hash_u8( seed:u32, v:u8 ) -> u32 { murmur2a::hash8( seed, v) }
+	#[inline(always)] fn hash_u16(seed:u32, v:u16) -> u32 { murmur2a::hash16(seed, v) }
+	#[inline(always)] fn hash_u32(seed:u32, v:u32) -> u32 { murmur2a::hash32(seed, v) }
+	#[inline(always)] fn hash_u64(seed:u32, v:u64) -> u32 { murmur2a::hash64(seed, v) }
 }
